@@ -7,5 +7,5 @@ neleus :
 	cabal new-build --enable-tests neleus
 
 doctest :
-	doctest eldapo/src
 	doctest neleus/src
+	doctest eldapo/src

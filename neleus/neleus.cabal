@@ -68,5 +68,6 @@ test-suite neleus-tests
 
   build-depends:
     base64-bytestring,
+    QuickCheck,
     tasty,
     tasty-golden
