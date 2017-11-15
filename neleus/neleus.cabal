@@ -1,0 +1,72 @@
+name:                neleus
+version:             0
+synopsis:            Working with ASN.1 in BER & DER
+description:         
+  A package to work with DER encoded ASN values
+  .
+  compare with asn1-codec
+homepage:            https://github.com/futurice/haskell-neleus
+license:             BSD3
+license-file:        LICENSE
+author:              Oleg Grenrus <oleg.grenrus@iki.fi>
+maintainer:          Oleg Grenrus <oleg.grenrus@iki.fi>
+copyright:           (c) 2017 Futurice
+category:            Network
+build-type:          Simple
+cabal-version:       >=1.10
+extra-source-files:
+  test/spiceprogram.pem
+tested-with:
+  GHC==7.8.4
+  GHC==7.10.3
+  GHC==8.0.2
+  GHC==8.2.1
+
+source-repository head
+  type:      git
+  location:  https://github.com/futurice/haskell-neleus.git
+
+library
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+  hs-source-dirs:      src
+  exposed-modules:
+    Neleus
+    Neleus.Types
+    Neleus.Schema
+    Neleus.Pretty
+    Neleus.Decode
+    Neleus.Encode
+    Neleus.Generics
+    Neleus.DER
+    Neleus.Integer
+  build-depends:
+    base >=4.7 && <4.11,
+    attoparsec,
+    base-compat,
+    base16-bytestring,
+    bytestring,
+    containers,
+    free,
+    generics-sop,
+    pretty,
+    recursion-schemes,
+    transformers
+
+test-suite neleus-tests
+  type:                exitcode-stdio-1.0
+  default-language:    Haskell2010
+  ghc-options:         -Wall
+  hs-source-dirs:      test
+  main-is:             Tests.hs
+
+  -- build depends inheriting bounds from the library
+  build-depends:
+    base,
+    attoparsec,
+    neleus
+
+  build-depends:
+    base64-bytestring,
+    tasty,
+    tasty-golden
