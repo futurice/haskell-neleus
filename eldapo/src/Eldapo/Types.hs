@@ -13,6 +13,7 @@ import qualified Data.ByteString as BS
 --                           protocolOp CHOICE {bindRequest BindRequest
 --                                              bindResponse BindResponse
 --                                              unbindRequest UnbindRequest
+--                                              searchRequest SearchRequest
 --                                              ...}
 --                           controls [0] SEQUENCE OF Control OPTIONAL}
 data LDAPMessage = LDAPMessage
@@ -21,6 +22,7 @@ data LDAPMessage = LDAPMessage
         '[ BindRequest
         , BindResponse
         , UnbindRequest
+        , SearchRequest
         , ASN1Value
         ]
     , lmControls :: Maybe Controls
@@ -38,6 +40,7 @@ instance ASN1 LDAPMessage where
             option "bindRequest" :*
             option "bindResponse" :*
             option "unbindRequest" :*
+            option "searchRequest" :*
             option "..." :*
             Nil
 
@@ -262,7 +265,7 @@ data SearchRequest = SearchRequest
   deriving (Show, Generic)
 
 instance ASN1 SearchRequest where
-    schema = tagged ApplicationC 3 $ Neleus.sequence $
+    schema = taggedSequence ApplicationC 3 $
         required "baseObject" :*
         required "scope" :*
         required "derefAliases" :*
@@ -273,6 +276,12 @@ instance ASN1 SearchRequest where
         required "attributes" :*
         Nil
 
+-- | >>> prettySchema (schema :: Schema Filter)
+-- Filter ::= CHOICE {and [0] SET OF Filter
+--                    or [1] SET OF Filter
+--                    not [2] Filter
+--                    equalityMatch [3] AttributeValueAssertion
+--                    ...}
 data Filter
     = FilterAnd (Set Filter)
     | FilterOr (Set Filter)
