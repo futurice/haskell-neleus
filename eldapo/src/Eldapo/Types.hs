@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds     #-}
 {-# LANGUAGE DeriveGeneric #-}
 module Eldapo.Types where
 
@@ -7,25 +8,38 @@ import Neleus
 
 import qualified Data.ByteString as BS
 
--- | @
--- LDAPMessage ::= SEQUENCE {
---         messageID       MessageID,
---         protocolOp      CHOICE { ... },
---         controls        [0] Controls OPTIONAL }
--- @
-data LDAPMessage a = LDAPMessage
+-- | >>> prettySchema (schema :: Schema LDAPMessage)
+-- LDAPMessage ::= SEQUENCE {messageID INTEGER
+--                           protocolOp CHOICE {bindRequest BindRequest
+--                                              bindResponse BindResponse
+--                                              unbindRequest UnbindRequest
+--                                              ...}
+--                           controls [0] SEQUENCE OF Control OPTIONAL}
+data LDAPMessage = LDAPMessage
     { lmId       :: MessageID
-    , lmOp       :: a
+    , lmOp       :: NS I
+        '[ BindRequest
+        , BindResponse
+        , UnbindRequest
+        , ASN1Value
+        ]
     , lmControls :: Maybe Controls
     }
   deriving (Show, Generic)
 
-instance ASN1 a => ASN1 (LDAPMessage a) where
+instance ASN1 LDAPMessage where
     schema = Neleus.sequence $
         required "messageID" :*
-        required "protocolOp" :*
+        required' "protocolOp" opts :*
         optional' "controls" (tagged ContextC 0 schema) :*
         Nil
+      where
+        opts = SChoice $
+            option "bindRequest" :*
+            option "bindResponse" :*
+            option "unbindRequest" :*
+            option "..." :*
+            Nil
 
 -- | @
 -- MessageID ::= INTEGER (0 .. maxInt)
@@ -39,10 +53,10 @@ type MessageID = Integer -- Int32
 newtype LDAPString = LDAPString OctetString deriving (Show, Eq, Ord, Generic)
 instance ASN1 LDAPString where schema = namedNewtype
 
--- | @
+-- | >>> prettySchema (schema :: Schema LDAPOID)
 -- LDAPOID ::= OCTET STRING
--- @
-type LDAPOID = OctetString
+newtype LDAPOID = LDAPOID OctetString deriving (Show, Eq, Ord, Generic)
+instance ASN1 LDAPOID where schema = namedNewtype
 
 -- | >>> prettySchema (schema :: Schema LDAPDN)
 -- LDAPDN ::= OCTET STRING
@@ -142,14 +156,11 @@ instance ASN1 LDAPResult where
         optional' "referral" (tagged ContextC 3 schema) :*
         Nil
 
---------------------------
-
-
------------------------------------------------------
+-------------------------------------------------------------------------------
 -- Bind
 -------------------------------------------------------------------------------
 
--- | >>> prettySchema (schema :: Schema BindRequest)  
+-- | >>> prettySchema (schema :: Schema BindRequest)
 -- BindRequest ::= [APPLICATION 0] SEQUENCE {version INTEGER
 --                                           name LDAPDN
 --                                           authentication AuthenticationChoice}
@@ -201,22 +212,38 @@ instance ASN1 SaslCredentials where
         optional "credentials" :*
         Nil
 
--- TODO: BindResponse
-
---  BindResponse ::= [APPLICATION 1] SEQUENCE {
---
---       COMPONENTS OF LDAPResult,
---       serverSaslCreds    [7] OCTET STRING OPTIONAL }
-
--- | @
--- UnbindRequest ::= [APPLICATION 2] NULL
--- @
-data UnbindRequest = UnbindRequest ()
+-- | >>> prettySchema (schema :: Schema BindResponse)
+-- BindResponse ::= SEQUENCE {resultCode ANY
+--                            matchedDN LDAPDN
+--                            erroMessage LDAPString
+--                            referral [3] ANY OPTIONAL
+--                            serverSaslCreds [7] OCTET STRING OPTIONAL}
+data BindResponse = BindResponse
+    { bdCode             :: ASN1Value
+    , brMatchedDN        :: LDAPDN
+    , brErrorMessage     :: LDAPString
+    , brReferreal        :: Maybe ASN1Value
+    , brServerSaslsCreds :: Maybe OctetString
+    }
   deriving (Show, Generic)
 
--- | TODO: make namedUnit
+instance ASN1 BindResponse where
+    schema = Neleus.sequence $
+        required "resultCode" :*
+        required "matchedDN" :*
+        required "erroMessage" :*
+        optional' "referral" (tagged ContextC 3 schema) :*
+        optional' "serverSaslCreds" (tagged ContextC 7 schema) :*
+        Nil
+
+-- | >>> prettySchema (schema :: Schema UnbindRequest)
+-- UnbindRequest ::= [APPLICATION 2] NULL
+data UnbindRequest = UnbindRequest
+  deriving (Show, Generic)
+
 instance ASN1 UnbindRequest where
-    schema = tagged ApplicationC 2 namedNewtype
+    schema = named' (const UnbindRequest) (const ()) $
+        tagged ApplicationC 2 (schema :: Schema ())
 
 -------------------------------------------------------------------------------
 -- Search

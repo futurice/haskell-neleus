@@ -47,7 +47,7 @@ data PSchema
     | PNamed SchemaName
     | PTagged Explicitness Class Tag PSchema
     | PSequence [(FieldName, PSchema, PFieldMod)]
-    | PChoice
+    | PChoice [(OptionName, PSchema)]
     | PSetOf PSchema
     | PSequenceOf PSchema
     | PAny
@@ -97,7 +97,7 @@ schemaP (SNamed n _ sch)          = namedSchema n sch
 schemaP (SSetOf sch)              = PSetOf <$> schemaP sch
 schemaP (SSequenceOf sch)         = PSequenceOf <$> schemaP sch
 schemaP (SSequence fs)            = PSequence <$> fSchemaP fs
-schemaP (SChoice _)               = pure PChoice
+schemaP (SChoice fs)              = PChoice <$> oSchemaP fs
 schemaP (STagged exc cls tag sch) = PTagged exc cls tag <$> schemaP sch
 schemaP SAny                      = pure PAny
 
@@ -109,6 +109,12 @@ fSchemaP (f :* fs) = (:) <$> pp f <*> fSchemaP fs
     pp (Opt n sch)   = (\p -> (n, p, POpt)) <$> schemaP sch
     pp (Def n _ sch) = (\p -> (n, p, PDef)) <$> schemaP sch
 
+oSchemaP :: NP OptionSchema a -> PM [(OptionName, PSchema)]
+oSchemaP Nil = pure []
+oSchemaP (SOption n sch :* fs) = mk <$> schemaP sch <*> oSchemaP fs
+  where
+    mk p xs = (n,p) : xs
+
 ppPSchema :: PSchema -> PP.Doc
 ppPSchema PNull           = PP.text "NULL"
 ppPSchema PBool           = PP.text "BOOLEAN"
@@ -118,14 +124,18 @@ ppPSchema (PNamed n)      = PP.text n
 ppPSchema (PSetOf p)      = PP.text "SET OF" <+> ppPSchema p
 ppPSchema (PSequenceOf p) = PP.text "SEQUENCE OF" <+> ppPSchema p
 ppPSchema (PSequence fs)            =
-    PP.text "SEQUENCE" <+> PP.braces (PP.nest 4 $ PP.vcat $ map pp fs)
+    PP.text "SEQUENCE" <+> PP.braces (PP.vcat $ map pp fs)
   where
     pp (f, p, m) = PP.text f <+> ppPSchema p <+> case m of
         PReq -> PP.empty
         POpt -> PP.text "OPTIONAL"
         PDef -> PP.text "DEFAULT ?"
-ppPSchema (PChoice) =
-    PP.text "CHOICE"
+ppPSchema (PChoice fs) =
+    PP.text "CHOICE" <+> PP.braces (PP.vcat $ map pp fs)
+  where
+    pp ("...", PAny) = PP.text "..."
+    pp (f, p)        = PP.text f <+> ppPSchema p
+
 ppPSchema (PTagged exc cls tag sch) =
     PP.brackets (cls' <+> tag') <+> exc' <+> sch'
   where

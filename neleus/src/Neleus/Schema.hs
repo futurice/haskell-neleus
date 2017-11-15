@@ -12,6 +12,7 @@ module Neleus.Schema (
     integer,
     bool,
     -- * Combinators
+    named',
     namedNewtype,
     tagged,
     sequence,
@@ -204,6 +205,9 @@ namedNewtype = SNamed (typeName ([] :: [b])) (Iso build match) schema where
 
     match :: b -> a
     match = unK1 . unM1 . unM1 . unM1 . from
+
+named' :: forall a b. (HasDatatypeName b) => (a -> b) -> (b -> a) -> Schema a -> Schema b
+named' f g = SNamed (typeName ([] :: [b])) (Iso f g)
 
 -------------------------------------------------------------------------------
 -- Tagging
