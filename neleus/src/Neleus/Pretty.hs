@@ -2,7 +2,7 @@
 module Neleus.Pretty (prettySchema) where
 
 import Control.Monad             (unless)
-import Control.Monad.Trans.State (State, execState, get, modify', put)
+import Control.Monad.Trans.State (State, execState, get, modify, put)
 import Data.Set                  (Set)
 import Prelude ()
 import Prelude.Compat
@@ -71,7 +71,7 @@ st0 :: St
 st0 = St mempty mempty PP.empty
 
 write :: PP.Doc -> PM ()
-write doc = modify' $ \s -> s
+write doc = modify $ \s -> s
     { sDoc = sDoc s PP.$$ doc
     }
 

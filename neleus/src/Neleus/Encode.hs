@@ -1,5 +1,8 @@
 module Neleus.Encode where
 
+import Prelude ()
+import Prelude.Compat
+
 import Data.Bits      ((.|.))
 import Data.Semigroup
 

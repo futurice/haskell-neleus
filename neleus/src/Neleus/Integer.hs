@@ -3,6 +3,9 @@
 -- Integers are encoded in two's complement binary.
 module Neleus.Integer where
 
+import Prelude ()
+import Prelude.Compat
+
 import Data.Int           (Int8)
 import Data.List          (foldl')
 import Data.List.NonEmpty (NonEmpty (..))

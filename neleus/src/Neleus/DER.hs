@@ -1,4 +1,5 @@
-{-# LANGUAGE MultiWayIf, DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE MultiWayIf    #-}
 -- |
 --
 -- TODO: max length of value in parsers?
@@ -12,6 +13,9 @@ module Neleus.DER (
     Fix (..),
     unfix,
     ) where
+
+import Prelude ()
+import Prelude.Compat
 
 import Data.Bits             ((.&.))
 import Data.Functor.Foldable (Fix (..), unfix)

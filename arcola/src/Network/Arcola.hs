@@ -34,8 +34,8 @@ module Network.Arcola (
 
 import Control.Concurrent              (forkIOWithUnmask)
 import Control.Exception
-       (SomeException (..), allowInterrupt, bracket, catch, displayException,
-       finally, handle, mask_, toException, try)
+       (SomeException (..), allowInterrupt, bracket, catch, finally, handle,
+       mask_, toException, try)
 import Control.Monad                   (when)
 import Data.ByteString                 (ByteString)
 import Data.Foldable                   (traverse_)
@@ -56,6 +56,18 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import qualified Data.ByteString               as BS
 import qualified Data.ByteString.Lazy          as LBS
 import qualified Data.ByteString.Lazy.Internal as LBSI
+
+-------------------------------------------------------------------------------
+-- Compat
+-------------------------------------------------------------------------------
+
+#if MIN_VERSION_base(4,8,0)
+import Control.Exception (displayException)
+#else
+import Control.Exception (Exception)
+displayException :: Exception e => e -> String
+displayException = show
+#endif
 
 -------------------------------------------------------------------------------
 -- Application
@@ -154,7 +166,7 @@ settingsOnOpen f s = fmap (\x -> s { _settingsOnOpen = x }) (f (_settingsOnOpen 
 settingsOnClose :: Lens' Settings (SockAddr -> IO ())
 settingsOnClose f s = fmap (\x -> s { _settingsOnClose = x }) (f (_settingsOnClose s))
 {-# INLINE settingsOnClose #-}
-      
+
 -- | Code to run after the listening socket is ready but before entering
 -- the main event loop. Useful for signaling to tests that they can start
 -- running, or to drop permissions after binding to a restricted port.
@@ -163,7 +175,7 @@ settingsOnClose f s = fmap (\x -> s { _settingsOnClose = x }) (f (_settingsOnClo
 settingsBeforeMainLoop :: Lens' Settings (IO ())
 settingsBeforeMainLoop f s = fmap (\x -> s { _settingsBeforeMainLoop = x }) (f (_settingsBeforeMainLoop s))
 {-# INLINE settingsBeforeMainLoop #-}
-      
+
 -- | Code to fork a new thread to accept a connection.
 --
 -- This may be useful if you need OS bound threads, or if
