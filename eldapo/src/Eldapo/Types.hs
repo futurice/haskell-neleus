@@ -14,6 +14,7 @@ import qualified Data.ByteString as BS
 --                                              bindResponse BindResponse
 --                                              unbindRequest UnbindRequest
 --                                              searchRequest SearchRequest
+--                                              searchResultDone SearchResultDone
 --                                              ...}
 --                           controls [0] SEQUENCE OF Control OPTIONAL}
 data LDAPMessage = LDAPMessage
@@ -23,6 +24,7 @@ data LDAPMessage = LDAPMessage
         , BindResponse
         , UnbindRequest
         , SearchRequest
+        , SearchResultDone
         , ASN1Value
         ]
     , lmControls :: Maybe Controls
@@ -41,6 +43,7 @@ instance ASN1 LDAPMessage where
             option "bindResponse" :*
             option "unbindRequest" :*
             option "searchRequest" :*
+            option "searchResultDone" :*
             option "..." :*
             Nil
 
@@ -86,12 +89,12 @@ instance ASN1 AttributeValueAssertion where
 -- @
 type Controls = [Control]
 
--- | @
--- Control ::= SEQUENCE {
---         controlType             LDAPOID,
---         criticality             BOOLEAN DEFAULT FALSE,
---         controlValue            OCTET STRING OPTIONAL }
--- @
+-- | >>> prettySchema (schema :: Schema Control)
+-- Control ::= SEQUENCE {controlType LDAPOID
+--                       criticality BOOLEAN DEFAULT ?
+--                       controlValue OCTET STRING OPTIONAL}
+--
+-- /TODO:/ default printing in schema. @criticality BOOLEAN DEFAULT TRUE@.
 data Control = Control
     { controlType        :: LDAPOID
     , controlCriticality :: Bool
@@ -181,12 +184,9 @@ instance ASN1 BindRequest where
         required "authentication" :*
         Nil
 
--- | @
--- AuthenticationChoice ::= CHOICE {
---         simple                  [0] OCTET STRING,
---                                  -- 1 and 2 reserved
---         sasl                    [3] SaslCredentials }
--- @
+-- | >>> prettySchema (schema :: Schema AuthenticationChoice)
+-- AuthenticationChoice ::= CHOICE {simpl [0] OCTET STRING
+--                                  sasl [3] SaslCredentials}
 data AuthenticationChoice
     = AuthSimple BS.ByteString
     | AuthSasl SaslCredentials
@@ -198,11 +198,9 @@ instance ASN1 AuthenticationChoice where
         option' "sasl"  (tagged ContextC 3 schema) :*
         Nil
 
--- | @
--- SaslCredentials ::= SEQUENCE {
---         mechanism               LDAPString,
---         credentials             OCTET STRING OPTIONAL }
--- @
+-- | >>> prettySchema (schema :: Schema SaslCredentials)
+-- SaslCredentials ::= SEQUENCE {mechanism LDAPString
+--                               credentials OCTET STRING OPTIONAL}
 data SaslCredentials = SaslCredentials
     { scMechanism   :: LDAPString
     , scCredentials :: Maybe BS.ByteString
@@ -222,13 +220,19 @@ instance ASN1 SaslCredentials where
 --                            referral [3] ANY OPTIONAL
 --                            serverSaslCreds [7] OCTET STRING OPTIONAL}
 data BindResponse = BindResponse
-    { bdCode             :: ASN1Value
+    { brCode             :: ResultCode
     , brMatchedDN        :: LDAPDN
     , brErrorMessage     :: LDAPString
-    , brReferreal        :: Maybe ASN1Value
+    , brReferreal        :: Maybe Referral
     , brServerSaslsCreds :: Maybe OctetString
     }
   deriving (Show, Generic)
+
+-- | TODO: proper enumeration
+type ResultCode = ASN1Value
+
+-- | TODO: proper Referral type
+type Referral = ASN1Value
 
 instance ASN1 BindResponse where
     schema = Neleus.sequence $
@@ -252,6 +256,15 @@ instance ASN1 UnbindRequest where
 -- Search
 -------------------------------------------------------------------------------
 
+-- | >>> prettySchema (schema :: Schema SearchRequest)
+-- SearchRequest ::= [APPLICATION 3] SEQUENCE {baseObject LDAPDN
+--                                             scope ANY
+--                                             derefAliases ANY
+--                                             sizeLimit INTEGER
+--                                             timeLimit INTEGER
+--                                             typesOnly BOOLEAN
+--                                             filter Filter
+--                                             attributes ANY}
 data SearchRequest = SearchRequest
     { srBaseObject :: LDAPDN
     , scope        :: ASN1Value
@@ -297,6 +310,27 @@ instance ASN1 Filter where
         option' "not"           (tagged ContextC 2 schema) :*
         option' "equalityMatch" (tagged ContextC 3 schema) :*
         option "..." :*
+        Nil
+
+data SearchResultDone = SearchResultDone
+    { srdCode             :: ResultCode
+    , srdMatchedDN        :: LDAPDN
+    , srdErrorMessage     :: LDAPString
+    , srdReferreal        :: Maybe Referral
+    }
+  deriving (Show, Generic)
+
+-- | >>> prettySchema (schema :: Schema SearchResultDone)
+-- SearchResultDone ::= [APPLICATION 5] SEQUENCE {resultCode ANY
+--                                                matchedDN LDAPDN
+--                                                erroMessage LDAPString
+--                                                referral [3] ANY OPTIONAL}
+instance ASN1 SearchResultDone where
+    schema = taggedSequence ApplicationC 5 $
+        required "resultCode" :*
+        required "matchedDN" :*
+        required "erroMessage" :*
+        optional' "referral" (tagged ContextC 3 schema) :*
         Nil
 
 -------------------------------------------------------------------------------
