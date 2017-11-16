@@ -1,5 +1,8 @@
 module Neleus.Types where
 
+import Prelude ()
+import Prelude.Compat
+
 import Data.ByteString (ByteString)
 
 type OctetString = ByteString
