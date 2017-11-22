@@ -109,45 +109,37 @@ instance ASN1 Control where
         optional "controlValue" :*
         Nil
 
-{-
 -------------------------------------------------------------------------------
 -- LDAPResult
 -------------------------------------------------------------------------------
 
--- | @
--- ENUMERATED {
--- success                      (0),
--- operationsError              (1),
--- protocolError                (2),
--- ...
--- authMethodNotSupported       (7),
--- strongAuthRequired           (8),
--- ...
--- inappropriateAuthentication  (48),
--- ... }
--- @
+-- | >>> prettySchema (schema :: Schema ResultCode)
+-- ResultCode ::= ENUMERATED {success (0)
+--                            operationsError (1)
+--                            protocolError (2)
+--                            inappropriateAuthentication (48)}
 data ResultCode
     = RCSuccess
+    | RCOperationsError
     | RCProtocolError
     | RCInvalidCredentials
-  deriving Show
+  deriving (Show, Generic)
 
--- @
--- LDAPResult ::= SEQUENCE {
---         resultCode      ENUMERATED {
---         matchedDN       LDAPDN,
---         errorMessage    LDAPString,
---         referral        [3] Referral OPTIONAL }
--- @
--}
+instance ASN1 ResultCode where
+    schema = enumeration $
+        enumOption "success" 0 :::
+        enumOption "operationsError" 1 :::
+        enumOption "protocolError" 2 :::
+        enumOption "inappropriateAuthentication" 48 :::
+        VNil
 
 -- | >>> prettySchema (schema :: Schema LDAPResult)
--- LDAPResult ::= SEQUENCE {resultCode ANY
+-- LDAPResult ::= SEQUENCE {resultCode ResultCode
 --                          matchedDN LDAPDN
 --                          erroMessage LDAPString
 --                          referral [3] ANY OPTIONAL}
 data LDAPResult = LDAPResult
-    { resCode         :: ASN1Value
+    { resCode         :: ResultCode
     , resMatchedDN    :: LDAPDN
     , resErrorMessage :: LDAPString
     , resReferreal    :: Maybe ASN1Value
@@ -214,7 +206,7 @@ instance ASN1 SaslCredentials where
         Nil
 
 -- | >>> prettySchema (schema :: Schema BindResponse)
--- BindResponse ::= SEQUENCE {resultCode ANY
+-- BindResponse ::= SEQUENCE {resultCode ResultCode
 --                            matchedDN LDAPDN
 --                            erroMessage LDAPString
 --                            referral [3] ANY OPTIONAL
@@ -227,9 +219,6 @@ data BindResponse = BindResponse
     , brServerSaslsCreds :: Maybe OctetString
     }
   deriving (Show, Generic)
-
--- | TODO: proper enumeration
-type ResultCode = ASN1Value
 
 -- | TODO: proper Referral type
 type Referral = ASN1Value
@@ -321,7 +310,7 @@ data SearchResultDone = SearchResultDone
   deriving (Show, Generic)
 
 -- | >>> prettySchema (schema :: Schema SearchResultDone)
--- SearchResultDone ::= [APPLICATION 5] SEQUENCE {resultCode ANY
+-- SearchResultDone ::= [APPLICATION 5] SEQUENCE {resultCode ResultCode
 --                                                matchedDN LDAPDN
 --                                                erroMessage LDAPString
 --                                                referral [3] ANY OPTIONAL}

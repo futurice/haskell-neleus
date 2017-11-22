@@ -21,6 +21,8 @@ module Neleus.Schema (
     choice,
     option,
     option',
+    enumeration,
+    enumOption,
     -- ** Fields
     required,
     required',
@@ -32,18 +34,23 @@ module Neleus.Schema (
     Schema (..),
     FieldSchema (..),
     OptionSchema (..),
+    EnumSchema (..),
     SchemaName,
     FieldName,
     OptionName,
+    EnumName,
     Iso (..),
     ) where
 
+import Data.Fin       (Fin)
 import Data.Set       (Set)
+import Data.Vec.Lazy  (Vec)
 import GHC.Generics
 import Prelude ()
 import Prelude.Compat hiding (sequence)
 
 import qualified Data.ByteString as BS
+import qualified Data.Fin.Enum   as E
 
 import Neleus.Generics
 import Neleus.Types
@@ -69,6 +76,7 @@ data Schema a where
     SSequenceOf  :: Schema a -> Schema [a]
     SSequence    :: NP FieldSchema xs -> Schema (NP I xs)
     SChoice      :: NP OptionSchema xs -> Schema (NS I xs)
+    SEnumeration :: Vec n EnumSchema -> Schema (Fin n)
     STagged      :: Explicitness -> Class -> Tag -> Schema a -> Schema a
     -- magic
     SAny         :: Schema ASN1Value
@@ -83,6 +91,10 @@ data FieldSchema a where
 type OptionName = String
 
 data OptionSchema a = SOption OptionName (Schema a)
+
+type EnumName = String
+
+data EnumSchema = EnumSchema EnumName !Int
 
 -------------------------------------------------------------------------------
 -- Class
@@ -180,6 +192,16 @@ taggedSequence cls tag
     = SNamed (typeName ([] :: [a])) (Iso fromNP toNP)
     . STagged Implicit cls tag
     . SSequence
+
+-------------------------------------------------------------------------------
+-- Enumeration
+-------------------------------------------------------------------------------
+
+enumeration :: forall a n. (Generic a, HasDatatypeName a, E.GFrom a, E.GTo a, E.GEnumSize a ~ n) => Vec n EnumSchema -> Schema a
+enumeration = SNamed (typeName ([] :: [a])) (Iso E.gto E.gfrom) . SEnumeration
+
+enumOption :: EnumName -> Int -> EnumSchema
+enumOption = EnumSchema
 
 -------------------------------------------------------------------------------
 -- Choice

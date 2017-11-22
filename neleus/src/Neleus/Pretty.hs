@@ -9,6 +9,7 @@ import Prelude.Compat
 import Text.PrettyPrint          ((<+>))
 
 import qualified Data.Set         as Set
+import qualified Data.Vec.Lazy    as V
 import qualified Text.PrettyPrint as PP
 
 import Neleus.Generics
@@ -48,6 +49,7 @@ data PSchema
     | PTagged Explicitness Class Tag PSchema
     | PSequence [(FieldName, PSchema, PFieldMod)]
     | PChoice [(OptionName, PSchema)]
+    | PEnumeration [(EnumName, Int)]
     | PSetOf PSchema
     | PSequenceOf PSchema
     | PAny
@@ -98,6 +100,7 @@ schemaP (SSetOf sch)              = PSetOf <$> schemaP sch
 schemaP (SSequenceOf sch)         = PSequenceOf <$> schemaP sch
 schemaP (SSequence fs)            = PSequence <$> fSchemaP fs
 schemaP (SChoice fs)              = PChoice <$> oSchemaP fs
+schemaP (SEnumeration fs)         = pure $ PEnumeration $ eSchemaP fs
 schemaP (STagged exc cls tag sch) = PTagged exc cls tag <$> schemaP sch
 schemaP SAny                      = pure PAny
 
@@ -114,6 +117,9 @@ oSchemaP Nil = pure []
 oSchemaP (SOption n sch :* fs) = mk <$> schemaP sch <*> oSchemaP fs
   where
     mk p xs = (n,p) : xs
+
+eSchemaP :: Vec n EnumSchema -> [(EnumName, Int)]
+eSchemaP = map (\(EnumSchema n i) -> (n,i)) . V.toList
 
 ppPSchema :: PSchema -> PP.Doc
 ppPSchema PNull           = PP.text "NULL"
@@ -135,7 +141,10 @@ ppPSchema (PChoice fs) =
   where
     pp ("...", PAny) = PP.text "..."
     pp (f, p)        = PP.text f <+> ppPSchema p
-
+ppPSchema (PEnumeration fs) =
+    PP.text "ENUMERATED" <+> PP.braces (PP.vcat $ map pp fs)
+  where
+    pp (n, i) = PP.text n <+> PP.parens (PP.int i)
 ppPSchema (PTagged exc cls tag sch) =
     PP.brackets (cls' <+> tag') <+> exc' <+> sch'
   where
