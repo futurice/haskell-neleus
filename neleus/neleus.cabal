@@ -50,6 +50,8 @@ library
     free,
     generics-sop,
     pretty,
+    fin,
+    vec,
     recursion-schemes,
     transformers
 

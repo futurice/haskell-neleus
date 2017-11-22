@@ -24,9 +24,11 @@ module Neleus.Generics (
     toNS,
     fromNS,
     IsSum,
+    -- * Vec for Enum
+    Vec (..),
     -- * Names
     HasDatatypeName (..),
-    -- * Other
+    -- * SOP
     I (..),
     All,
     ) where
@@ -34,6 +36,7 @@ module Neleus.Generics (
 import Data.Bifunctor (first)
 import Generics.SOP   (All, I (..), NP (..), NS (..))
 import GHC.Generics
+import Data.Vec.Lazy (Vec (..))
 
 -------------------------------------------------------------------------------
 -- Product
