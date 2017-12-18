@@ -9,3 +9,9 @@ neleus :
 doctest :
 	doctest neleus/src
 	doctest eldapo/src
+
+run :
+	cabal new-run eldapo
+
+test-request :
+	ldapsearch -x -h 'localhost:9999'

@@ -17,8 +17,6 @@ import qualified Data.ByteString.Lazy.Char8  as LBS8
 import qualified Data.Set                    as Set
 import qualified Eldapo.Types                as T
 
-import qualified Data.ByteString.Base16.Lazy as LBS16
-
 defaultMain :: IO ()
 defaultMain = do
     putStrLn "Start"
