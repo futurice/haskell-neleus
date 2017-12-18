@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds     #-}
 {-# LANGUAGE DeriveGeneric #-}
-module Eldapo.Types where
+module Neleus.LDAP where
 
 import Data.Set     (Set)
 import Data.String  (IsString (..))

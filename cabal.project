@@ -1,7 +1,8 @@
 packages:
-  eldapo
-  arcola
-  neleus
+  eldapo/
+  arcola/
+  neleus/
+  neleus-ldap/
 
 package eldapo
   ghc-options: -Werror
@@ -10,4 +11,7 @@ package arcola
   ghc-options: -Werror
 
 package neleus
+  ghc-options: -Werror
+
+package neleus-ldap
   ghc-options: -Werror
