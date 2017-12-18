@@ -3,6 +3,7 @@
 module Eldapo.Types where
 
 import Data.Set     (Set)
+import Data.String  (IsString (..))
 import GHC.Generics (Generic)
 import Neleus
 
@@ -14,6 +15,7 @@ import qualified Data.ByteString as BS
 --                                              bindResponse BindResponse
 --                                              unbindRequest UnbindRequest
 --                                              searchRequest SearchRequest
+--                                              searchResultEntry SearchResultEntry
 --                                              searchResultDone SearchResultDone
 --                                              ...}
 --                           controls [0] SEQUENCE OF Control OPTIONAL}
@@ -24,6 +26,7 @@ data LDAPMessage = LDAPMessage
         , BindResponse
         , UnbindRequest
         , SearchRequest
+        , SearchResultEntry
         , SearchResultDone
         , ASN1Value
         ]
@@ -43,6 +46,7 @@ instance ASN1 LDAPMessage where
             option "bindResponse" :*
             option "unbindRequest" :*
             option "searchRequest" :*
+            option "searchResultEntry" :*
             option "searchResultDone" :*
             option "..." :*
             Nil
@@ -59,6 +63,9 @@ type MessageID = Integer -- Int32
 newtype LDAPString = LDAPString OctetString deriving (Show, Eq, Ord, Generic)
 instance ASN1 LDAPString where schema = namedNewtype
 
+instance IsString LDAPString where
+    fromString = LDAPString . fromString
+
 -- | >>> prettySchema (schema :: Schema LDAPOID)
 -- LDAPOID ::= OCTET STRING
 newtype LDAPOID = LDAPOID OctetString deriving (Show, Eq, Ord, Generic)
@@ -69,7 +76,11 @@ instance ASN1 LDAPOID where schema = namedNewtype
 newtype LDAPDN = LDAPDN OctetString deriving (Show, Eq, Ord, Generic)
 instance ASN1 LDAPDN where schema = namedNewtype
 
+instance IsString LDAPDN where
+    fromString = LDAPDN . fromString
+
 type AttributeDescription = LDAPString
+type AttributeValue = OctetString
 type AssertionValue = OctetString
 
 data AttributeValueAssertion = AttributeValueAssertion
@@ -142,7 +153,7 @@ data LDAPResult = LDAPResult
     { resCode         :: ResultCode
     , resMatchedDN    :: LDAPDN
     , resErrorMessage :: LDAPString
-    , resReferreal    :: Maybe ASN1Value
+    , resReferral     :: Maybe ASN1Value
     }
   deriving (Show, Generic)
 
@@ -215,7 +226,7 @@ data BindResponse = BindResponse
     { brCode             :: ResultCode
     , brMatchedDN        :: LDAPDN
     , brErrorMessage     :: LDAPString
-    , brReferreal        :: Maybe Referral
+    , brReferral         :: Maybe Referral
     , brServerSaslsCreds :: Maybe OctetString
     }
   deriving (Show, Generic)
@@ -283,12 +294,14 @@ instance ASN1 SearchRequest where
 --                    or [1] SET OF Filter
 --                    not [2] Filter
 --                    equalityMatch [3] AttributeValueAssertion
+--                    present [7] LDAPString
 --                    ...}
 data Filter
     = FilterAnd (Set Filter)
     | FilterOr (Set Filter)
     | FilterNot Filter
     | FilterEqualityMatch AttributeValueAssertion
+    | FilterPresent AttributeDescription
     | FilterOther ASN1Value
   deriving (Eq, Ord, Show, Generic)
 
@@ -298,22 +311,53 @@ instance ASN1 Filter where
         option' "or"            (tagged ContextC 1 schema) :*
         option' "not"           (tagged ContextC 2 schema) :*
         option' "equalityMatch" (tagged ContextC 3 schema) :*
+        option' "present"       (tagged ContextC 7 schema) :*
         option "..." :*
         Nil
 
-data SearchResultDone = SearchResultDone
-    { srdCode             :: ResultCode
-    , srdMatchedDN        :: LDAPDN
-    , srdErrorMessage     :: LDAPString
-    , srdReferreal        :: Maybe Referral
+-- | >>> prettySchema (schema :: Schema SearchResultEntry)
+-- SearchResultEntry ::= [APPLICATION 4] SEQUENCE {objectName LDAPDN
+--                                                 sreAttributes SEQUENCE OF PartialAttribute}
+data SearchResultEntry = SearchResultEntry
+    { sreObjectName :: LDAPDN
+    , sreAttributes :: [PartialAttribute]
     }
   deriving (Show, Generic)
+
+instance ASN1 SearchResultEntry where
+    schema = taggedSequence ApplicationC 4 $
+        required "objectName" :*
+        required "sreAttributes" :*
+        Nil
+
+-- | >>> prettySchema (schema :: Schema PartialAttribute)
+-- PartialAttribute ::= SEQUENCE {type LDAPString
+--                                vals SET OF OCTET STRING}
+data PartialAttribute = PartialAttribute
+    { paType :: AttributeDescription
+    , paVals :: Set AttributeValue
+    }
+  deriving (Show, Generic)
+
+instance ASN1 PartialAttribute where
+    schema = Neleus.sequence $
+        required "type" :*
+        required "vals" :*
+        Nil
 
 -- | >>> prettySchema (schema :: Schema SearchResultDone)
 -- SearchResultDone ::= [APPLICATION 5] SEQUENCE {resultCode ResultCode
 --                                                matchedDN LDAPDN
 --                                                erroMessage LDAPString
 --                                                referral [3] ANY OPTIONAL}
+data SearchResultDone = SearchResultDone
+    { srdCode             :: !ResultCode
+    , srdMatchedDN        :: !LDAPDN
+    , srdErrorMessage     :: !LDAPString
+    , srdReferral         :: !(Maybe Referral)
+    }
+  deriving (Show, Generic)
+
 instance ASN1 SearchResultDone where
     schema = taggedSequence ApplicationC 5 $
         required "resultCode" :*

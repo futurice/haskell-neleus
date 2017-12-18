@@ -126,6 +126,12 @@ decodeA chk ident@(Identifier _cls pc _tag) contents sch = case sch of
 
     -- 8.15 Encoding of an open type
     SAny -> asn1Parser (Fix (Fin ident contents (Fix End)))
+
+    {- TODO
+    (SSetOf _)
+    (SSequenceOf _)
+    (SEnumeration _)
+    -}
   where
     len = BS.length contents
 
@@ -147,6 +153,7 @@ decodeF (f :* fs) (Fix (Fin ident contents s)) = case f of
         x <- decodeA True ident contents sch
         xs <- decodeF fs s
         pure (I x :* xs)
+    {- TODO: Opt Def #-}
 
 -- | TODO: At the moment, this is dummy and tries all options in order.
 decodeO :: Bool -> Identifier -> BS.ByteString -> [Char] -> NP OptionSchema xs -> Either Error (NS I xs)
@@ -220,12 +227,6 @@ iter s0        = do
     xs <- iter s1
     pure (x : xs)
 
-
-nonUniversalParser :: PC -> BS.ByteString -> (BS -> ASN1Value) -> Either Error ASN1Value
-nonUniversalParser Constructed s f = f . Value <$> iter (fullDER s)
-nonUniversalParser Primitive s f = Right (f (BS s))
-
-{-
 -- | non universal types are encoded similarly.
 --
 -- X.680 says that there is no difference between non-universal tags.
@@ -233,6 +234,6 @@ nonUniversalParser Primitive s f = Right (f (BS s))
 -- Three classes are there for historical reasons.
 --
 -- See note in X.680 (07/2002) 8.3
-nonUniversalParser Constructed f = ConsumeConstructed (SequenceOf (f . Val) asn1Parser)
-nonUniversalParser Primitive   f = ConsumeOctetString (f . BS)
--}
+nonUniversalParser :: PC -> BS.ByteString -> (BS -> ASN1Value) -> Either Error ASN1Value
+nonUniversalParser Constructed s f = f . Value <$> iter (fullDER s)
+nonUniversalParser Primitive s f = Right (f (BS s))
