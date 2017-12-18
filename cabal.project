@@ -2,3 +2,12 @@ packages:
   eldapo
   arcola
   neleus
+
+package eldapo
+  ghc-options: -Werror
+
+package arcola
+  ghc-options: -Werror
+
+package neleus
+  ghc-options: -Werror

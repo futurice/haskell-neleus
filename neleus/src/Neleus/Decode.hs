@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GADTs         #-}
 {-# LANGUAGE RankNTypes    #-}
 {-# LANGUAGE TupleSections #-}
@@ -9,19 +10,25 @@ module Neleus.Decode (
 
 -- http://luca.ntop.org/Teaching/Appunti/asn1.html
 
+import Data.Foldable      (toList)
+import Data.Functor.Alt   (Alt (..))
+import Data.List          (intercalate, nub)
 import Data.List.NonEmpty (NonEmpty (..))
+import Data.Semigroup     (Semigroup (..))
+import Data.Vec.Lazy      (Vec (..))
 import Prelude ()
 import Prelude.Compat     hiding (sequence)
 
-import qualified Data.ByteString as BS
+import qualified Data.ByteString    as BS
+import qualified Data.Fin           as Fin
+import qualified Data.List.NonEmpty as NE
+import qualified Data.Set           as Set
 
 import Neleus.DER
 import Neleus.Generics
 import Neleus.Integer
 import Neleus.Schema
 import Neleus.Types
-
-import Debug.Trace
 
 -- | For now, errors are just strings.
 type Error = String
@@ -56,9 +63,9 @@ decodeA chk ident@(Identifier _cls pc _tag) contents sch = case sch of
     SBool -> do
         requireClassTag chk ident UniversalC 0x01
 
-        -- 8.2.1 boolean should be primitive
+        -- 8.2.1 boolean must be primitive
         requirePrimitive pc
-        -- should consist of a single octet
+        -- must consist of a single octet
         requireBool (len == 1) "Bool: shall consist of a single octet"
         let w = BS.head contents
         -- 8.2.2 False encoded as 0, True as everything else
@@ -68,9 +75,9 @@ decodeA chk ident@(Identifier _cls pc _tag) contents sch = case sch of
     SInteger -> do
         requireClassTag chk ident UniversalC 0x02
 
-        -- 8.3.1 integer should be primitive
+        -- 8.3.1 integer must be primitive
         requirePrimitive pc
-        -- 8.3.1 should be one or more octets
+        -- 8.3.1 must be one or more octets
         requireBool (len >= 1) "Integer: Shall consist >=1 octets"
 
         -- Note: this enforces len >= 1 as well
@@ -78,11 +85,27 @@ decodeA chk ident@(Identifier _cls pc _tag) contents sch = case sch of
             (w:ws) -> Right (decodeInteger (w :| ws))
             []     -> Left "panic! len >= 1, but empty contents"
 
+    -- 8.4 Encoding of an enumerated value
+    SEnumeration vs -> do
+        requireClassTag chk ident UniversalC 0x0A
+
+        -- 8.3.1 integer must be primitive
+        requirePrimitive pc
+        -- 8.3.1 must be one or more octets
+        requireBool (len >= 1) "Integer: Shall consist >=1 octets"
+
+        -- Note: this enforces len >= 1 as well
+        i <- case BS.unpack contents of
+            (w:ws) -> Right (decodeInteger (w :| ws))
+            []     -> Left "panic! len >= 1, but empty contents"
+
+        decodeEnum (fromInteger i) vs
+
     -- 8.7 Encoding of an octetstring value
     SOctetString -> do
         requireClassTag chk ident UniversalC 0x04
 
-        -- DER 10.2: Primitive form should be used
+        -- DER 10.2: Primitive form must be used
         requirePrimitive pc
 
         Right contents
@@ -91,10 +114,10 @@ decodeA chk ident@(Identifier _cls pc _tag) contents sch = case sch of
     SNull -> do
         requireClassTag chk ident UniversalC 0x05
 
-        -- 8.8.1 null should be primitive
+        -- 8.8.1 null must be primitive
         requirePrimitive pc
-        -- 8.8.2 should not contain any octets
-        requireBool (len == 0) "End-of-contents content's should be absent"
+        -- 8.8.2 must not contain any octets
+        requireBool (len == 0) "End-of-contents content's must be absent"
 
         return ()
 
@@ -102,10 +125,28 @@ decodeA chk ident@(Identifier _cls pc _tag) contents sch = case sch of
     SSequence fs -> do
         requireClassTag chk ident UniversalC 0x10
 
-        -- 8.9.1 sequence should be constructed
+        -- 8.9.1 sequence must be constructed
         requireConstructed pc
 
         decodeF fs (fullDER contents)
+
+    -- 8.10 Encoding of a sequence-of value
+    SSequenceOf s -> do
+        requireClassTag chk ident UniversalC 0x10
+
+        -- 8.10.1 sequence-of must be constructed
+        requireConstructed pc
+
+        decodeSeqOf s (fullDER contents)
+
+    -- 8.12 Encoding of a set-of value
+    SSetOf s -> do
+        requireClassTag chk ident UniversalC 0x11
+
+        -- 8.10.1 sequence-of must be constructed
+        requireConstructed pc
+
+        Set.fromList <$> decodeSeqOf s (fullDER contents)
 
     -- 8.13 Encoding of a choice value
     SChoice os -> decodeO chk ident contents "Choice don't match" os
@@ -119,41 +160,32 @@ decodeA chk ident@(Identifier _cls pc _tag) contents sch = case sch of
     STagged Explicit cls' tag' sch' -> do
         requireClassTag chk ident cls' tag'
 
-        -- 8.14.3 Explicit tags should be constructed
+        -- 8.14.3 Explicit tags must be constructed
         requireConstructed pc
 
         decodeSingle sch' contents
 
     -- 8.15 Encoding of an open type
     SAny -> asn1Parser (Fix (Fin ident contents (Fix End)))
-
-    {- TODO
-    (SSetOf _)
-    (SSequenceOf _)
-    (SEnumeration _)
-    -}
   where
     len = BS.length contents
 
--- TODO: non-deterministic match
-decodeF :: NP FieldSchema xs -> Fix DER -> Either Error (NP I xs)
-decodeF _ (Fix (Err err))  = Left err
-decodeF Nil (Fix End)      = Right Nil
-decodeF Nil _              = Left "not fully consumed SEQUENCE"
-decodeF (f :* fs) s@(Fix End) = case f of
-    Req name _ -> Left $ "missing fields in SEQUENCE, e.g." ++ name
-    Opt _ _ -> do
-        xs <- decodeF fs s
-        pure (I Nothing :* xs)
-    Def _ v _ -> do
-        xs <- decodeF fs s
-        pure (I v :* xs)
-decodeF (f :* fs) (Fix (Fin ident contents s)) = case f of
-    Req _name sch -> do
+decodeSeqOf :: Schema a -> Fix DER -> Either Error [a]
+decodeSeqOf sch = go where
+    go (Fix (Err err))              = Left err
+    go (Fix End)                    = Right []
+    go (Fix (Fin ident contents s)) = do
         x <- decodeA True ident contents sch
-        xs <- decodeF fs s
-        pure (I x :* xs)
-    {- TODO: Opt Def #-}
+        xs <- go s
+        pure (x : xs)
+
+decodeEnum :: Int -> Vec n EnumSchema -> Either Error (Fin.Fin n)
+decodeEnum i = go where
+    go :: Vec m EnumSchema -> Either Error (Fin.Fin m)
+    go VNil = Left $ "unknown enum value " ++ show i
+    go (EnumSchema _ x ::: es)
+        | x == i    = Right Fin.Z
+        | otherwise = Fin.S <$> go es
 
 -- | TODO: At the moment, this is dummy and tries all options in order.
 decodeO :: Bool -> Identifier -> BS.ByteString -> [Char] -> NP OptionSchema xs -> Either Error (NS I xs)
@@ -162,6 +194,89 @@ decodeO  chk  ident  contents err (SOption _name sch :* schs) =
     case decodeA chk ident contents sch of
         Right x -> Right (Z (I x))
         Left e  -> S <$> decodeO chk ident contents (err ++ ";" ++ e) schs
+
+-------------------------------------------------------------------------------
+-- Sequence
+-------------------------------------------------------------------------------
+
+-- TODO: non-deterministic match
+decodeF :: NP FieldSchema xs -> Fix DER -> Either Error (NP I xs)
+decodeF fs s = case decodeF' fs s of
+    Success (x :| []) -> Right x
+    Success _         -> Left "Ambiguous parse"
+    Failure es        ->
+        Left $ "Failed SEQUENCE parse, encountered errors: " ++ intercalate "; " (nub (map snd (toList es)))
+{-
+
+decodeF (f :* fs) (Fix (Fin ident contents s)) = case f of
+    Req _name sch -> do
+        x <- decodeA True ident contents sch
+        xs <- decodeF fs s
+        pure (I x :* xs)
+    {- TODO: Opt Def #-}
+-}
+
+decodeF' :: NP FieldSchema xs -> Fix DER -> NEValidation Error (NP I xs)
+decodeF' _         (Fix (Err err)) = nevError err
+decodeF' Nil       (Fix End)       = pure Nil
+decodeF' Nil       _               = nevError' "there is leftover"
+decodeF' (f :* fs) s@(Fix End)     = case f of
+    Req name _ -> nevError' $ "missing fields, e.g." ++ name
+    Opt _ _    -> (I Nothing :*) <$> nevFromEither (decodeF fs s)
+    Def _ v _  -> (I v :*)       <$> nevFromEither (decodeF fs s)
+decodeF' (f :* fs) s'@(Fix (Fin ident contents s)) = case f of
+    Req _name sch ->
+        let x  = nevFromEither $ decodeA True ident contents sch
+            xs = decodeF' fs s
+        in (\y ys -> I y :* ys) <$> x <*> xs
+    Opt _name sch ->
+        let x   = nevFromEither $ decodeA True ident contents sch
+            xs  = decodeF' fs s
+            xs' = decodeF' fs s'
+        in (\y ys -> I (Just y) :* ys) <$> x <*> xs
+            <!> (I Nothing :*) <$> xs'
+    Def _name v sch ->
+        let x   = nevFromEither $ decodeA True ident contents sch
+            xs  = decodeF' fs s
+            xs' = decodeF' fs s'
+        in (\y ys -> I y :* ys) <$> x <*> xs
+            <!> (I v :*) <$> xs'
+
+data NEValidation e a
+    = Failure (NonEmpty (Bool, e))
+    | Success (NonEmpty a)
+  deriving (Functor)
+
+nevError :: e -> NEValidation e a
+nevError e = Failure $ (True, e) :| []
+
+nevError' :: e -> NEValidation e a
+nevError' e = Failure $ (False, e) :| []
+
+nevFromEither :: Either e a -> NEValidation e a
+nevFromEither = either nevError pure
+
+instance Applicative (NEValidation e)  where
+    pure = Success . pure
+
+    Failure as <*> Failure bs = combineFailure as bs
+    Success _  <*> Failure es = Failure es
+    Failure es <*> Success _  = Failure es
+    Success fs <*> Success xs = Success (fs <*> xs)
+
+instance Alt (NEValidation e) where
+    Failure as    <!> Failure bs   = combineFailure as bs
+    Failure _     <!> bs@Success{} = bs
+    as@Success {} <!> Failure _    = as
+    Success as    <!> Success bs   = Success (as <> bs)
+
+combineFailure :: NonEmpty (Bool, e) -> NonEmpty (Bool, e) -> NEValidation e a
+combineFailure as bs = Failure $ case NE.filter fst es' of
+        e : es -> e :| es
+        _      -> es'
+      where
+        es' = as <> bs
+
 
 -------------------------------------------------------------------------------
 -- Guards
@@ -202,7 +317,7 @@ asn1Parser' (Fix (Err err)) = Left err
 asn1Parser' (Fix End)       = Left "unexpected end-of-input"
 asn1Parser' (Fix (Fin ident@(Identifier cls pc tag) contents s)) = do
     (,s) <$> case cls of
-        UniversalC -> case traceShow ident tag of
+        UniversalC -> case tag of
             0x02 -> Int <$> decodeA False ident contents schema
             0x01 -> Bool <$> decodeA False ident contents schema
             0x04 -> OctetString <$> decodeA False ident contents schema

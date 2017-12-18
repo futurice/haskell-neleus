@@ -41,19 +41,20 @@ library
     Neleus.DER
     Neleus.Integer
   build-depends:
-    base >=4.7 && <4.11,
+    base               >=4.7 && <4.11,
     attoparsec,
     base-compat,
     base16-bytestring,
     bytestring,
     containers,
+    fin,
     free,
     generics-sop,
     pretty,
-    fin,
-    vec,
     recursion-schemes,
-    transformers
+    semigroupoids,
+    transformers,
+    vec
 
   if !impl(ghc >= 7.10)
     build-depends:
