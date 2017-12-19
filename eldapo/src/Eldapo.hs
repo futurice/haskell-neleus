@@ -15,7 +15,7 @@ import qualified Data.ByteString.Base16.Lazy as LBS16
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.ByteString.Lazy.Char8  as LBS8
 import qualified Data.Set                    as Set
-import qualified Eldapo.Types                as T
+import qualified Neleus.LDAP                as T
 
 defaultMain :: IO ()
 defaultMain = do

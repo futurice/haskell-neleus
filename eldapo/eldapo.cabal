@@ -31,7 +31,6 @@ library
   hs-source-dirs:      src
   exposed-modules:
     Eldapo
-    Eldapo.Types
   build-depends:
     base >=4.7 && <4.11,
     arcola,
@@ -42,6 +41,7 @@ library
     containers,
     free,
     neleus,
+    neleus-ldap,
     semigroupoids,
     recursion-schemes
   if !impl(ghc >= 8.0)
